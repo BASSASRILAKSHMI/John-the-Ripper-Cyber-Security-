@@ -64,6 +64,11 @@
       background: #e68900;
     }
 
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
     #output {
       white-space: pre-wrap;
       background: rgba(0,0,0,0.7);
@@ -101,14 +106,28 @@
       font-weight: bold;
       margin-top: 1rem;
     }
+
+    .info {
+      color: #4caf50;
+      font-style: italic;
+      margin-top: 0.5rem;
+    }
+
+    .debug {
+      background: rgba(255,255,0,0.2);
+      padding: 0.5rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      margin-top: 0.5rem;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>🔐 John the Ripper Demo</h1>
     <form id="uploadForm">
-      <input type="file" id="fileInput" />
-      <button type="submit">⚡ Crack Passwords</button>
+      <input type="file" id="fileInput" accept=".txt" />
+      <button type="submit" id="crackBtn">⚡ Crack Passwords</button>
     </form>
     <div id="output"></div>
   </div>
@@ -117,6 +136,18 @@
     document.getElementById("uploadForm").onsubmit = async (e) => {
       e.preventDefault();
       let file = document.getElementById("fileInput").files[0];
+      let crackBtn = document.getElementById("crackBtn");
+      let outputDiv = document.getElementById("output");
+
+      if (!file) {
+        outputDiv.innerHTML = `<div class="error">Please select a hash file (.txt).</div>`;
+        return;
+      }
+
+      crackBtn.disabled = true;
+      crackBtn.textContent = "🔄 Cracking...";
+      outputDiv.innerHTML = `<div class="info">Running John the Ripper... This may take a minute. Check console for debug.</div>`;
+
       let formData = new FormData();
       formData.append("hashfile", file);
 
@@ -127,33 +158,67 @@
         });
 
         if (!res.ok) {
-          throw new Error("Server returned status " + res.status);
+          throw new Error(`Server error: ${res.status} - ${res.statusText}`);
         }
 
         let data = await res.json();
-        let outputDiv = document.getElementById("output");
         outputDiv.innerHTML = "";
 
         if (data.result) {
-          // Split John output into lines and parse into table
-          let lines = data.result.trim().split("\n");
-          let table = `<table class="result-table"><tr><th>User/Hash</th><th>Password</th></tr>`;
-          lines.forEach(line => {
-            let parts = line.split(":");
-            if (parts.length >= 2) {
-              table += `<tr><td>${parts[0]}</td><td>${parts[1]}</td></tr>`;
-            } else {
-              table += `<tr><td colspan="2">${line}</td></tr>`;
-            }
-          });
-          table += "</table>";
-          outputDiv.innerHTML = table;
+  // Parse merged John --show outputs
+  let lines = data.result.trim().split("\n");
+  let crackedCount = 0;
+  let table = `<table class="result-table"><tr><th>Hash/User</th><th>Cracked Password</th></tr>`;
+
+  lines.forEach(line => {
+    let trimmed = line.trim();
+    // Skip junk/status lines from multiple runs
+    if (trimmed.includes("password hash cracked") || 
+        trimmed.includes("left") || 
+        trimmed.includes("Guesses") || 
+        trimmed.includes("rules:") || 
+        trimmed.includes("No password") ||
+        trimmed.includes("Loaded") ||
+        trimmed.includes("Error in") ||
+        trimmed === "" ||
+        !trimmed.includes(":") ||
+        trimmed.startsWith("Session")) {
+      return;
+    }
+    // Split on first :
+    let parts = trimmed.split(":", 2);
+    if (parts.length === 2) {
+      let hashUser = parts[0].trim();
+      let password = parts[1].trim();
+      if (hashUser && password && !password.startsWith("(not") && !password.includes("cracked") && password.length > 0) {
+        if (hashUser === "" || hashUser === "?") hashUser = "Unknown";
+        table += `<tr><td>${hashUser}</td><td>${password}</td></tr>`;
+        crackedCount++;
+      }
+    }
+  });
+
+  table += "</table>";
+  let info = crackedCount > 0 ? 
+    `<div class="info">${crackedCount} password(s) cracked successfully!</div>` : 
+    `<div class="error">No passwords cracked. Check terminal for details.</div>`;
+  outputDiv.innerHTML = info + table;
+  
+  // Debug raw if low count
+  if (crackedCount < lines.length / 2) {
+    outputDiv.innerHTML += `<div class="debug">Raw output snippet:<br>${data.result.substring(0, 300)}...</div>`;
+  }
         } else {
-          outputDiv.innerHTML = `<div class="error">${data.error || "No passwords cracked."}</div>`;
+          outputDiv.innerHTML = `<div class="error">${data.error || "Unknown error. Check backend logs."}</div>`;
+          if (data.debug) {
+            outputDiv.innerHTML += `<div class="debug">Debug: ${data.debug.substring(0, 300)}...</div>`;
+          }
         }
       } catch (err) {
-        document.getElementById("output").innerHTML =
-          `<div class="error">Error: ${err.message}</div>`;
+        outputDiv.innerHTML = `<div class="error">Network/Fetch Error: ${err.message}. Is the backend running on port 5000?</div>`;
+      } finally {
+        crackBtn.disabled = false;
+        crackBtn.textContent = "⚡ Crack Passwords";
       }
     };
   </script>
