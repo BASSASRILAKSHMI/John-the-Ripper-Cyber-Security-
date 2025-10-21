@@ -1,1 +1,4 @@
-$1$IZI6vRCq$ijJdCW0o0liTVv.QnoH1x1
+user1:$1$IZI6vRCq$ijJdCW0o0liTVv.QnoH1x1
+user2:5f4dcc3b5aa765d61d8327deb882cf99
+user3:$6$salt$MktMKPZJ6t59GfxcJU20DwcwQzfMvOlHFVZiOVD71w.igcOo1R7vBYR65JquIQ/7siC7VRpmteKvZmfSkNc69.
+user4:e39fdfb234253b7c5557d5c52ebf3179
